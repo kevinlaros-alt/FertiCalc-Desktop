@@ -23,10 +23,10 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name FertiCalc --add-data "FertiCalc_data.xlsx;." src/main.py
+          pyinstaller --onedir --windowed --name FertiCalc --add-data "FertiCalc_data.xlsx;." src/main.py
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
           name: FertiCalc-Windows
-          path: dist/FertiCalc.exe
+          path: dist/FertiCalc/
