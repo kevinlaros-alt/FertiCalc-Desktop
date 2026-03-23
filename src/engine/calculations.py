@@ -88,14 +88,16 @@ def _base_key(fert_id: str) -> str:
     return re.sub(r'-[abc]$', '', fert_id)
 
 
-def calc_fert_ec(fert_id: str, qty: float, tank: TankConfig) -> FertResult:
+def calc_fert_ec(fert_id: str, qty: float, tank: TankConfig, is_micro: bool = False) -> FertResult:
     """Calculate EC values for a single fertilizer entry."""
     fdef = FERT_BY_ID.get(fert_id)
     if not fdef or qty == 0 or tank.capacity == 0:
         return FertResult(fert_id)
 
     dose = tank.dose
-    ec_per_liter = qty * fdef.ec_value * 1000 / tank.capacity
+    # Micro elements: QTY in grams (factor *1), Macro: QTY in kg (factor *1000)
+    factor = 1 if is_micro else 1000
+    ec_per_liter = qty * fdef.ec_value * factor / tank.capacity
     calc_ec = ec_per_liter * dose / 1000
     gr_per_l = calc_ec / fdef.ec_value if fdef.ec_value else 0
 
@@ -105,8 +107,8 @@ def calc_fert_ec(fert_id: str, qty: float, tank: TankConfig) -> FertResult:
     return FertResult(fert_id, ec_per_liter, calc_ec, gr_per_l)
 
 
-def calc_tank(tank: TankConfig) -> List[FertResult]:
-    return [calc_fert_ec(fid, qty, tank) for fid, qty in tank.entries.items()]
+def calc_tank(tank: TankConfig, is_micro: bool = False) -> List[FertResult]:
+    return [calc_fert_ec(fid, qty, tank, is_micro) for fid, qty in tank.entries.items()]
 
 
 def calc_mmol(all_results: List[FertResult]) -> MmolResult:
@@ -175,6 +177,24 @@ def scale_umol(raw: UmolResult, calc_ec: float, desired_ec: float, water: WaterA
     )
 
 
+def calc_micro(micro_entries: Dict[str, float], tank_a: TankConfig, tank_b: TankConfig) -> List[FertResult]:
+    """Calculate micro elements using correct tank capacities.
+    Fe-chelates use Tank A capacity, all others use Tank B capacity.
+    Dose is based on Tank B dilution (1000/B_dilution).
+    """
+    FE_IDS = {'fe-dtpa-11', 'fe-eddha-6', 'fe-dtpa-3-liquid'}
+    dose = 1000 / tank_b.dilution if tank_b.dilution else 10
+
+    results = []
+    for fid, qty in micro_entries.items():
+        if fid in FE_IDS:
+            tank = TankConfig(capacity=tank_a.capacity, dilution=tank_a.dilution, dose=dose)
+        else:
+            tank = TankConfig(capacity=tank_b.capacity, dilution=tank_b.dilution, dose=dose)
+        results.append(calc_fert_ec(fid, qty, tank, is_micro=True))
+    return results
+
+
 def calculate(
     tank_a: TankConfig,
     tank_b: TankConfig,
@@ -186,7 +206,7 @@ def calculate(
     res_a = calc_tank(tank_a)
     res_b = calc_tank(tank_b)
     res_c = calc_tank(tank_c)
-    res_m = calc_tank(micro)
+    res_m = calc_micro(micro.entries, tank_a, tank_b)
 
     ec_a = sum(r.calc_ec for r in res_a)
     ec_b = sum(r.calc_ec for r in res_b)
