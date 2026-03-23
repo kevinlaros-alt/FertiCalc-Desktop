@@ -208,7 +208,10 @@ def calculate(
     res_c = calc_tank(tank_c)
     res_m = calc_micro(micro.entries, tank_a, tank_b)
 
-    ec_a = sum(r.calc_ec for r in res_a)
+    # Fe-chelate EC counts towards Tank A total (as in the Excel)
+    FE_IDS = {'fe-dtpa-11', 'fe-eddha-6', 'fe-dtpa-3-liquid'}
+    ec_fe = sum(r.calc_ec for r in res_m if r.fert_id in FE_IDS)
+    ec_a = sum(r.calc_ec for r in res_a) + ec_fe
     ec_b = sum(r.calc_ec for r in res_b)
     ec_c = sum(r.calc_ec for r in res_c)
     ec_total = ec_a + ec_b + ec_c
