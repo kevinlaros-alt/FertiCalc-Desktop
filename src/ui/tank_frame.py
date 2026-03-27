@@ -29,12 +29,14 @@ class TankFrame(ctk.CTkFrame):
         for var in [self.var_capacity, self.var_dilution, self.var_dose]:
             var.trace_add('write', lambda *_: self.on_change())
 
-        ctk.CTkLabel(frame, text="Inhoud (L):").pack(side="left", padx=(0, 5))
-        ctk.CTkEntry(frame, textvariable=self.var_capacity, width=80).pack(side="left", padx=(0, 15))
+        ctk.CTkLabel(frame, text="Inhoud:").pack(side="left", padx=(0, 5))
+        ctk.CTkEntry(frame, textvariable=self.var_capacity, width=80).pack(side="left", padx=(0, 2))
+        ctk.CTkLabel(frame, text="lts").pack(side="left", padx=(0, 15))
         ctk.CTkLabel(frame, text="Verdunning 1:").pack(side="left", padx=(0, 5))
         ctk.CTkEntry(frame, textvariable=self.var_dilution, width=80).pack(side="left", padx=(0, 15))
-        ctk.CTkLabel(frame, text="Dosering (L/m3):").pack(side="left", padx=(0, 5))
-        ctk.CTkEntry(frame, textvariable=self.var_dose, width=80).pack(side="left")
+        ctk.CTkLabel(frame, text="Dosering:").pack(side="left", padx=(0, 5))
+        ctk.CTkEntry(frame, textvariable=self.var_dose, width=80).pack(side="left", padx=(0, 2))
+        ctk.CTkLabel(frame, text="liter A/B per m3").pack(side="left")
 
     def _build_table(self):
         # Header
