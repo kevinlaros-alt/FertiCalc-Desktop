@@ -1,123 +1,218 @@
-"""Resultaten panel — mmol, ppm, EC, verhoudingen."""
+"""Berekende waarden balk — horizontale tabel onder de tanks, matching web portal."""
 
 import customtkinter as ctk
-from ..engine.calculations import CalcResults
-from ..engine.fertilizers import RECOMMENDED_UMOL
+from ..engine.calculations import CalcResults, TargetValues
 
 
-class ResultsFrame(ctk.CTkFrame):
+MACRO_ELEMS = ['EC', 'NH4', 'NO3', 'K', 'Ca', 'Mg', 'H2PO4', 'SO4', 'Cl', 'Na']
+MICRO_ELEMS = ['Fe', 'Mn', 'Zn', 'B', 'Cu', 'Mo']
+
+
+class ResultsBar(ctk.CTkFrame):
+    """Horizontal results summary bar at the bottom of the calculator."""
+
     def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
+        super().__init__(parent, fg_color="white", corner_radius=8,
+                         border_width=1, border_color="#e5e7eb", **kwargs)
+        self._targets = TargetValues()
+        self._is_recirc = False
         self._build()
 
     def _build(self):
-        # EC section
-        ec_frame = ctk.CTkFrame(self)
-        ec_frame.pack(fill="x", padx=10, pady=(10, 5))
+        # Green header bar
+        header = ctk.CTkFrame(self, fg_color="#15803d", corner_radius=6, height=32)
+        header.pack(fill="x", padx=4, pady=(4, 0))
+        header.pack_propagate(False)
 
-        ctk.CTkLabel(ec_frame, text="EC Overzicht", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=5)
+        ctk.CTkLabel(header, text="Berekende waarden (mmol/umol)",
+                     text_color="white", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=10)
+        self.lbl_total_ec = ctk.CTkLabel(header, text="EC: 0.000",
+                                          text_color="white", font=ctk.CTkFont(size=12, weight="bold"))
+        self.lbl_total_ec.pack(side="right", padx=10)
 
-        ec_grid = ctk.CTkFrame(ec_frame, fg_color="transparent")
-        ec_grid.pack(fill="x", padx=10, pady=5)
+        # Recirculation info bar (hidden by default)
+        self.recirc_bar = ctk.CTkFrame(self, fg_color="#dbeafe", corner_radius=4, height=28)
+        self.recirc_labels = {}
+        recirc_inner = ctk.CTkFrame(self.recirc_bar, fg_color="transparent")
+        recirc_inner.pack(fill="x", padx=10)
+        for key, label, color in [
+            ('drain_ec', 'EC uit Drain:', '#2563eb'),
+            ('ab_ec', 'EC uit A/B:', '#16a34a'),
+            ('dilution', 'Auto Verdunning:', '#7c3aed'),
+        ]:
+            ctk.CTkLabel(recirc_inner, text=label, font=ctk.CTkFont(size=11),
+                         text_color=color).pack(side="left", padx=(10, 2))
+            lbl = ctk.CTkLabel(recirc_inner, text="0.000", font=ctk.CTkFont(size=11, weight="bold"),
+                               text_color=color)
+            lbl.pack(side="left", padx=(0, 10))
+            self.recirc_labels[key] = lbl
 
-        self.ec_labels = {}
-        for i, (key, label) in enumerate([('a', 'Tank A'), ('b', 'Tank B'), ('c', 'Tank C'), ('total', 'Totaal')]):
-            col = ctk.CTkFrame(ec_grid, fg_color=("gray90", "gray20"), corner_radius=8)
-            col.pack(side="left", expand=True, fill="x", padx=3)
-            ctk.CTkLabel(col, text=label, font=ctk.CTkFont(size=10), text_color="gray50").pack()
-            lbl = ctk.CTkLabel(col, text="0.000", font=ctk.CTkFont(size=16, weight="bold"))
-            lbl.pack(pady=(0, 5))
-            self.ec_labels[key] = lbl
+        # Column headers
+        hdr_frame = ctk.CTkFrame(self, fg_color="#f9fafb")
+        hdr_frame.pack(fill="x", padx=4, pady=(4, 0))
 
-        # mmol table
-        mmol_frame = ctk.CTkFrame(self)
-        mmol_frame.pack(fill="x", padx=10, pady=5)
+        # Label column
+        ctk.CTkLabel(hdr_frame, text="", width=65, font=ctk.CTkFont(size=10)).pack(side="left")
 
-        ctk.CTkLabel(mmol_frame, text="mmol/l bij gewenste EC", font=ctk.CTkFont(size=13, weight="bold")).pack(pady=5)
+        self.col_labels = {}
+        for elem in MACRO_ELEMS:
+            lbl = ctk.CTkLabel(hdr_frame, text=elem, width=58,
+                               font=ctk.CTkFont(size=10, weight="bold"),
+                               text_color="#374151", anchor="center")
+            lbl.pack(side="left", padx=1)
 
-        header = ctk.CTkFrame(mmol_frame, fg_color=("gray85", "gray25"))
-        header.pack(fill="x", padx=5)
-        for text, w in [("Element", 80), ("mmol", 80), ("ppm", 80)]:
-            ctk.CTkLabel(header, text=text, width=w, font=ctk.CTkFont(size=11, weight="bold"),
-                         anchor="e" if text != "Element" else "w").pack(side="left", padx=3, pady=2)
+        # Separator
+        ctk.CTkLabel(hdr_frame, text="|", width=10, text_color="#d1d5db",
+                     font=ctk.CTkFont(size=10)).pack(side="left")
 
-        self.mmol_labels = {}
-        for elem in ['NO3', 'NH4', 'K', 'Ca', 'Mg', 'H2PO4', 'SO4', 'Cl']:
-            row = ctk.CTkFrame(mmol_frame, fg_color="transparent")
-            row.pack(fill="x", padx=5)
-            ctk.CTkLabel(row, text=elem, width=80, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left", padx=3)
-            lbl_mmol = ctk.CTkLabel(row, text="0.00", width=80, anchor="e", font=ctk.CTkFont(size=12, family="Courier"))
-            lbl_mmol.pack(side="left", padx=3)
-            lbl_ppm = ctk.CTkLabel(row, text="0", width=80, anchor="e", font=ctk.CTkFont(size=12, family="Courier"), text_color="gray50")
-            lbl_ppm.pack(side="left", padx=3)
-            self.mmol_labels[elem] = (lbl_mmol, lbl_ppm)
+        for elem in MICRO_ELEMS:
+            lbl = ctk.CTkLabel(hdr_frame, text=elem, width=50,
+                               font=ctk.CTkFont(size=10, weight="bold"),
+                               text_color="#ea580c", anchor="center")
+            lbl.pack(side="left", padx=1)
 
-        # µmol table
-        umol_frame = ctk.CTkFrame(self)
-        umol_frame.pack(fill="x", padx=10, pady=5)
+        # Berekend row
+        calc_frame = ctk.CTkFrame(self, fg_color="transparent")
+        calc_frame.pack(fill="x", padx=4, pady=2)
 
-        ctk.CTkLabel(umol_frame, text="umol/l Micro-elementen", font=ctk.CTkFont(size=13, weight="bold")).pack(pady=5)
+        ctk.CTkLabel(calc_frame, text="Berekend", width=65,
+                     font=ctk.CTkFont(size=11), text_color="#374151",
+                     anchor="w").pack(side="left")
 
-        header2 = ctk.CTkFrame(umol_frame, fg_color=("gray85", "gray25"))
-        header2.pack(fill="x", padx=5)
-        for text, w in [("Element", 70), ("umol", 70), ("ppm", 70), ("Advies", 60)]:
-            ctk.CTkLabel(header2, text=text, width=w, font=ctk.CTkFont(size=11, weight="bold"),
-                         anchor="e" if text != "Element" else "w").pack(side="left", padx=3, pady=2)
+        self.calc_labels = {}
+        for elem in MACRO_ELEMS:
+            lbl = ctk.CTkLabel(calc_frame, text="0", width=58,
+                               font=ctk.CTkFont(size=11, weight="bold"),
+                               text_color="#1f2937", anchor="center")
+            lbl.pack(side="left", padx=1)
+            self.calc_labels[elem] = lbl
 
-        self.umol_labels = {}
+        ctk.CTkLabel(calc_frame, text="|", width=10, text_color="#d1d5db",
+                     font=ctk.CTkFont(size=10)).pack(side="left")
+
+        for elem in MICRO_ELEMS:
+            lbl = ctk.CTkLabel(calc_frame, text="0", width=50,
+                               font=ctk.CTkFont(size=11, weight="bold"),
+                               text_color="#ea580c", anchor="center")
+            lbl.pack(side="left", padx=1)
+            self.calc_labels[elem] = lbl
+
+        # Target row
+        target_frame = ctk.CTkFrame(self, fg_color="transparent")
+        target_frame.pack(fill="x", padx=4, pady=(0, 6))
+
+        ctk.CTkLabel(target_frame, text="Target", width=65,
+                     font=ctk.CTkFont(size=11), text_color="#d97706",
+                     anchor="w").pack(side="left")
+
+        self.target_vars = {}
+        for elem in MACRO_ELEMS:
+            var = ctk.StringVar(value="")
+            entry = ctk.CTkEntry(target_frame, textvariable=var, width=56, height=24,
+                                 fg_color="#fef3c7", border_color="#fcd34d", border_width=1,
+                                 font=ctk.CTkFont(size=10), justify="center")
+            entry.pack(side="left", padx=1)
+            self.target_vars[elem] = var
+
+        ctk.CTkLabel(target_frame, text="|", width=10, text_color="#d1d5db",
+                     font=ctk.CTkFont(size=10)).pack(side="left")
+
+        for elem in MICRO_ELEMS:
+            var = ctk.StringVar(value="")
+            entry = ctk.CTkEntry(target_frame, textvariable=var, width=48, height=24,
+                                 fg_color="#ffedd5", border_color="#fdba74", border_width=1,
+                                 font=ctk.CTkFont(size=10), justify="center")
+            entry.pack(side="left", padx=1)
+            self.target_vars[elem] = var
+
+    def set_recirculation(self, is_recirc: bool):
+        self._is_recirc = is_recirc
+        if is_recirc:
+            self.recirc_bar.pack(fill="x", padx=4, pady=(2, 0),
+                                 after=list(self.children.values())[0])
+        else:
+            self.recirc_bar.pack_forget()
+
+    def set_targets(self, targets: TargetValues):
+        self._targets = targets
+        mapping = {
+            'EC': 'ec', 'NH4': 'nh4', 'NO3': 'no3', 'K': 'k', 'Ca': 'ca',
+            'Mg': 'mg', 'H2PO4': 'h2po4', 'SO4': 'so4', 'Cl': 'cl', 'Na': 'na',
+            'Fe': 'fe', 'Mn': 'mn', 'Zn': 'zn', 'B': 'b', 'Cu': 'cu', 'Mo': 'mo',
+        }
+        for display_name, attr in mapping.items():
+            var = self.target_vars.get(display_name)
+            if var:
+                val = getattr(targets, attr, 0)
+                var.set(str(val) if val else "")
+
+    def get_targets(self) -> TargetValues:
+        targets = TargetValues()
+        mapping = {
+            'EC': 'ec', 'NH4': 'nh4', 'NO3': 'no3', 'K': 'k', 'Ca': 'ca',
+            'Mg': 'mg', 'H2PO4': 'h2po4', 'SO4': 'so4', 'Cl': 'cl', 'Na': 'na',
+            'Fe': 'fe', 'Mn': 'mn', 'Zn': 'zn', 'B': 'b', 'Cu': 'cu', 'Mo': 'mo',
+        }
+        for display_name, attr in mapping.items():
+            var = self.target_vars.get(display_name)
+            if var:
+                try:
+                    setattr(targets, attr, float(var.get().replace(',', '.')))
+                except (ValueError, TypeError):
+                    pass
+        return targets
+
+    def update(self, results: CalcResults):
+        self.lbl_total_ec.configure(text=f"EC: {results.total_ec:.3f}")
+
+        mmol = results.mmol_scaled
+        umol = results.umol_scaled
+        ppm = results.ppm
+
+        # EC column shows desired EC (= total_ec for standard)
+        self.calc_labels['EC'].configure(text=f"{results.total_ec:.3f}")
+
+        # Macro mmol values
+        for elem in ['NH4', 'NO3', 'K', 'Ca', 'Mg', 'H2PO4', 'SO4', 'Cl', 'Na']:
+            val = getattr(mmol, elem.lower(), 0)
+            self.calc_labels[elem].configure(text=f"{val:.2f}")
+
+        # Micro umol values
         for elem in ['Fe', 'Mn', 'Zn', 'B', 'Cu', 'Mo']:
-            row = ctk.CTkFrame(umol_frame, fg_color="transparent")
-            row.pack(fill="x", padx=5)
-            ctk.CTkLabel(row, text=elem, width=70, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left", padx=3)
-            lbl_umol = ctk.CTkLabel(row, text="0.0", width=70, anchor="e", font=ctk.CTkFont(size=12, family="Courier"))
-            lbl_umol.pack(side="left", padx=3)
-            lbl_ppm = ctk.CTkLabel(row, text="0.000", width=70, anchor="e", font=ctk.CTkFont(size=12, family="Courier"), text_color="gray50")
-            lbl_ppm.pack(side="left", padx=3)
-            rec = RECOMMENDED_UMOL.get(elem, '')
-            ctk.CTkLabel(row, text=str(rec), width=60, anchor="e", font=ctk.CTkFont(size=11), text_color="gray40").pack(side="left", padx=3)
-            self.umol_labels[elem] = (lbl_umol, lbl_ppm)
+            val = getattr(umol, elem.lower(), 0)
+            self.calc_labels[elem].configure(text=f"{val:.1f}")
 
-        # Ratios
-        ratio_frame = ctk.CTkFrame(self)
-        ratio_frame.pack(fill="x", padx=10, pady=(5, 10))
+        # Recirculation info
+        if self._is_recirc:
+            self.recirc_labels['drain_ec'].configure(text=f"{results.ec_drain:.3f}")
+            self.recirc_labels['ab_ec'].configure(text=f"{results.ec_ab:.3f}")
+            dil = f"1:{results.auto_dilution:.1f}" if results.auto_dilution else "0"
+            self.recirc_labels['dilution'].configure(text=dil)
 
-        ctk.CTkLabel(ratio_frame, text="Verhoudingen", font=ctk.CTkFont(size=13, weight="bold")).pack(pady=5)
-        rg = ctk.CTkFrame(ratio_frame, fg_color="transparent")
-        rg.pack(fill="x", padx=10, pady=5)
+
+class RatioBox(ctk.CTkFrame):
+    """Compact ratio display matching web portal."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, fg_color="#f9fafb", corner_radius=6,
+                         border_width=1, border_color="#e5e7eb", **kwargs)
+
+        inner = ctk.CTkFrame(self, fg_color="transparent")
+        inner.pack(padx=10, pady=6)
+
+        ctk.CTkLabel(inner, text="Verhoudingen", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color="#374151").pack(side="left", padx=(0, 10))
 
         self.ratio_labels = {}
         for key, label in [('nk', 'N:K'), ('kca', 'K:Ca'), ('mgca', 'Mg:Ca')]:
-            col = ctk.CTkFrame(rg, fg_color=("gray90", "gray20"), corner_radius=8)
-            col.pack(side="left", expand=True, fill="x", padx=3)
-            ctk.CTkLabel(col, text=label, font=ctk.CTkFont(size=10), text_color="gray50").pack()
-            lbl = ctk.CTkLabel(col, text="0.00", font=ctk.CTkFont(size=14, weight="bold"))
-            lbl.pack(pady=(0, 5))
+            ctk.CTkLabel(inner, text=label, font=ctk.CTkFont(size=11),
+                         text_color="#6b7280").pack(side="left", padx=(8, 2))
+            lbl = ctk.CTkLabel(inner, text="0.00", font=ctk.CTkFont(size=12, weight="bold"),
+                               text_color="#1f2937")
+            lbl.pack(side="left")
             self.ratio_labels[key] = lbl
 
     def update(self, results: CalcResults):
-        self.ec_labels['a'].configure(text=f"{results.total_ec_a:.3f}")
-        self.ec_labels['b'].configure(text=f"{results.total_ec_b:.3f}")
-        self.ec_labels['c'].configure(text=f"{results.total_ec_c:.3f}")
-        self.ec_labels['total'].configure(text=f"{results.total_ec:.3f}")
-
-        mmol = results.mmol_scaled
-        ppm_m = results.ppm_mmol
-        for elem, (lbl_m, lbl_p) in self.mmol_labels.items():
-            attr = elem.lower()
-            val = getattr(mmol, attr, 0)
-            ppm_val = ppm_m.get(elem, 0)
-            lbl_m.configure(text=f"{val:.2f}")
-            lbl_p.configure(text=f"{ppm_val:.0f}")
-
-        umol = results.umol_scaled
-        ppm_u = results.ppm_umol
-        for elem, (lbl_u, lbl_p) in self.umol_labels.items():
-            attr = elem.lower()
-            val = getattr(umol, attr, 0)
-            ppm_val = ppm_u.get(elem, 0)
-            lbl_u.configure(text=f"{val:.1f}")
-            lbl_p.configure(text=f"{ppm_val:.3f}")
-
         self.ratio_labels['nk'].configure(text=f"{results.ratio_nk:.2f}")
         self.ratio_labels['kca'].configure(text=f"{results.ratio_kca:.2f}")
         self.ratio_labels['mgca'].configure(text=f"{results.ratio_mgca:.2f}")

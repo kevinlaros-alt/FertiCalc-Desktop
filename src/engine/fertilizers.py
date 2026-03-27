@@ -17,7 +17,7 @@ class FertilizerDef:
     tank: str  # 'A', 'B', 'C', 'micro'
     active_ingredients: List[ActiveIngredient] = field(default_factory=list)
     ec_value: float = 1.0
-    molar_mass: Optional[float] = None  # For micro µmol calc
+    molar_mass: Optional[float] = None  # For micro element umol calc
     unit: str = 'kg'  # 'kg' or 'liter'
     is_liquid: bool = False
     liquid_density: float = 1.0
@@ -96,16 +96,16 @@ FERTILIZERS: List[FertilizerDef] = [
 
 FERT_BY_ID = {f.id: f for f in FERTILIZERS}
 
-# Recommended µmol values
+# Recommended umol values
 RECOMMENDED_UMOL = {'Mn': 5, 'Zn': 3, 'B': 10, 'Cu': 0.5, 'Mo': 0.5, 'Fe': 15}
 
-# mmol→ppm factors
+# mmol->ppm factors (Na added)
 MMOL_TO_PPM = {
     'NO3': 14, 'NH4': 18.038, 'K': 39.102, 'Ca': 40.08,
-    'Mg': 24.31, 'H2PO4': 97, 'SO4': 96, 'Cl': 35.453,
+    'Mg': 24.31, 'H2PO4': 97, 'SO4': 96, 'Cl': 35.453, 'Na': 22.99,
 }
 
-# µmol→ppm factors
+# umol->ppm factors
 UMOL_TO_PPM = {'Fe': 0.056, 'Mn': 0.055, 'Zn': 0.065, 'B': 0.011, 'Cu': 0.064, 'Mo': 0.096}
 
 # Molar masses for mmol conversion
