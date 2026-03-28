@@ -3,6 +3,7 @@
 import customtkinter as ctk
 from typing import Callable
 from ..engine.calculations import WaterAnalysis, DrainAnalysis
+from .tank_frame import _bind_select_on_focus, _bind_enter_next
 
 
 MACRO_FIELDS = [
@@ -80,15 +81,20 @@ class WaterFrame(ctk.CTkFrame):
         var.trace_add('write', lambda *_: self.on_change())
         self.vars[key] = var
 
-        ctk.CTkEntry(row, textvariable=var, width=70, justify="right",
+        entry = ctk.CTkEntry(row, textvariable=var, width=70, justify="right",
                      fg_color=("#e8f0fe", "#1e3a5f"),
-                     font=ctk.CTkFont(size=12)).pack(side="right")
+                     font=ctk.CTkFont(size=12))
+        entry.pack(side="right")
+        _bind_select_on_focus(entry)
+        _bind_enter_next(entry)
 
     def get_analysis(self) -> WaterAnalysis:
         wa = WaterAnalysis()
         for key, var in self.vars.items():
             try:
-                setattr(wa, key, float(var.get()))
+                val = var.get().strip().replace(',', '.')
+                if val:
+                    setattr(wa, key, float(val))
             except (ValueError, TypeError):
                 pass
         return wa
@@ -133,15 +139,20 @@ class DrainFrame(ctk.CTkFrame):
         var.trace_add('write', lambda *_: self.on_change())
         self.vars[key] = var
 
-        ctk.CTkEntry(row, textvariable=var, width=70, justify="right",
+        entry = ctk.CTkEntry(row, textvariable=var, width=70, justify="right",
                      fg_color=("#dbeafe", "#1e3a5f"),
-                     font=ctk.CTkFont(size=12)).pack(side="right")
+                     font=ctk.CTkFont(size=12))
+        entry.pack(side="right")
+        _bind_select_on_focus(entry)
+        _bind_enter_next(entry)
 
     def get_analysis(self) -> DrainAnalysis:
         da = DrainAnalysis()
         for key, var in self.vars.items():
             try:
-                setattr(da, key, float(var.get()))
+                val = var.get().strip().replace(',', '.')
+                if val:
+                    setattr(da, key, float(val))
             except (ValueError, TypeError):
                 pass
         return da

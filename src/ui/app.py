@@ -86,19 +86,25 @@ class FertiCalcApp(ctk.CTk):
         self.recipe_menu.pack(side="left")
         self._refresh_recipe_list()
 
-        # Name
+        # Name — with visible label
+        ctk.CTkLabel(row1, text="Naam:", font=ctk.CTkFont(size=12),
+                     text_color="#6b7280").pack(side="left", padx=(10, 2))
         self.var_name = ctk.StringVar(value="")
-        ctk.CTkEntry(row1, textvariable=self.var_name, width=160, height=30,
+        name_entry = ctk.CTkEntry(row1, textvariable=self.var_name, width=160, height=30,
                      placeholder_text="Receptnaam",
                      font=ctk.CTkFont(size=13, weight="bold"),
-                     border_width=0, fg_color="#f9fafb").pack(side="left", padx=(10, 0))
+                     border_width=1, border_color="#d1d5db", fg_color="#f9fafb")
+        name_entry.pack(side="left")
 
-        # Crop
+        # Crop — with visible label
+        ctk.CTkLabel(row1, text="Gewas:", font=ctk.CTkFont(size=12),
+                     text_color="#6b7280").pack(side="left", padx=(10, 2))
         self.var_crop = ctk.StringVar(value="")
-        ctk.CTkEntry(row1, textvariable=self.var_crop, width=100, height=30,
+        crop_entry = ctk.CTkEntry(row1, textvariable=self.var_crop, width=100, height=30,
                      placeholder_text="Gewas",
                      font=ctk.CTkFont(size=12),
-                     border_width=0, fg_color="#f9fafb").pack(side="left", padx=10)
+                     border_width=1, border_color="#d1d5db", fg_color="#f9fafb")
+        crop_entry.pack(side="left")
 
         # Desired EC
         ec_frame = ctk.CTkFrame(row1, fg_color="transparent")
@@ -115,7 +121,7 @@ class FertiCalcApp(ctk.CTk):
         self.drain_pct_frame = ctk.CTkFrame(row1, fg_color="transparent")
         ctk.CTkLabel(self.drain_pct_frame, text="Drain%:", font=ctk.CTkFont(size=12),
                      text_color="#2563eb").pack(side="left", padx=(0, 5))
-        self.var_drain_pct = ctk.StringVar(value="30")
+        self.var_drain_pct = ctk.StringVar(value="0")
         self.var_drain_pct.trace_add('write', lambda *_: self._recalculate())
         ctk.CTkEntry(self.drain_pct_frame, textvariable=self.var_drain_pct, width=50, height=30,
                      font=ctk.CTkFont(size=12), justify="center",
@@ -184,12 +190,12 @@ class FertiCalcApp(ctk.CTk):
         self.tank_frames['micro'] = TankColumn(micro_col, 'micro', on_change=self._recalculate)
         self.tank_frames['micro'].pack(fill="both", expand=True)
 
-        # Middle: Water analysis
-        water_col = ctk.CTkScrollableFrame(micro_content, fg_color="white",
+        # Middle: Water analysis (hidden in recirculation mode)
+        self.water_col = ctk.CTkScrollableFrame(micro_content, fg_color="white",
                                             corner_radius=8, border_color="#e5e7eb",
                                             width=280)
-        water_col.pack(side="left", fill="y", padx=3)
-        self.water_frame = WaterFrame(water_col, on_change=self._recalculate)
+        self.water_col.pack(side="left", fill="y", padx=3)
+        self.water_frame = WaterFrame(self.water_col, on_change=self._recalculate)
         self.water_frame.pack(fill="x")
 
         # Right: Drain analysis (for recirculation)
@@ -200,7 +206,7 @@ class FertiCalcApp(ctk.CTk):
         self.drain_frame.pack(fill="x")
 
         # === RESULTS BAR (always visible at bottom) ===
-        self.results_bar = ResultsBar(self, height=120)
+        self.results_bar = ResultsBar(self)
         self.results_bar.pack(fill="x", padx=10, pady=(5, 8))
 
         self._recalculate()
@@ -219,11 +225,15 @@ class FertiCalcApp(ctk.CTk):
         self._mode = 'recirculation' if mode_label == "Met recirculatie" else 'standard'
         if self._mode == 'recirculation':
             self.drain_pct_frame.pack(side="left", padx=20)
+            # Hide water analysis, show drain analysis (matching web)
+            self.water_col.pack_forget()
             self.drain_col.pack(side="left", fill="y", padx=3)
             self.results_bar.set_recirculation(True)
         else:
             self.drain_pct_frame.pack_forget()
             self.drain_col.pack_forget()
+            # Show water analysis again
+            self.water_col.pack(side="left", fill="y", padx=3)
             self.results_bar.set_recirculation(False)
         self._recalculate()
 
@@ -263,7 +273,17 @@ class FertiCalcApp(ctk.CTk):
         for key in ['A', 'B', 'C', 'micro']:
             self.tank_frames[key].update_results(results.tank_results.get(key, []))
 
-        self.results_bar.update(results)
+        # Update auto-calculated verdunning/dosering on Tank A, B (and micro uses same)
+        auto_dil = results.auto_dilution
+        auto_dose = results.auto_dose
+        self.tank_frames['A'].update_auto_dilution(auto_dil, auto_dose)
+        self.tank_frames['B'].update_auto_dilution(auto_dil, auto_dose)
+        self.tank_frames['micro'].update_auto_dilution(auto_dil, auto_dose)
+        # Tank C keeps its original dilution (not auto-calculated)
+        c_config = self.tank_frames['C'].get_config()
+        self.tank_frames['C'].update_auto_dilution(c_config.dilution, c_config.dose)
+
+        self.results_bar.update(results, desired_ec)
         self.ratio_box.update(results)
 
     # === RECIPES ===
@@ -305,10 +325,12 @@ class FertiCalcApp(ctk.CTk):
         self.mode_var.set("Met recirculatie" if mode == 'recirculation' else "Zonder recirculatie")
         self._on_mode_change(self.mode_var.get())
 
-        if data.get('drain_percentage'):
-            self.var_drain_pct.set(str(data['drain_percentage'] * 100))
-        if data.get('drain_analysis'):
-            self.drain_frame.set_analysis(data['drain_analysis'])
+        # Always set drain data (even if zero/default)
+        drain_pct_val = data.get('drain_percentage', 0) or 0
+        self.var_drain_pct.set(str(drain_pct_val * 100))
+        drain_da = data.get('drain_analysis')
+        if drain_da:
+            self.drain_frame.set_analysis(drain_da)
 
         if data.get('target_values'):
             self.results_bar.set_targets(data['target_values'])
@@ -324,7 +346,7 @@ class FertiCalcApp(ctk.CTk):
         self.var_desired_ec.set("")
         self._mode = 'standard'
         self.mode_var.set("Zonder recirculatie")
-        self.var_drain_pct.set("30")
+        self.var_drain_pct.set("0")
 
         for frame in self.tank_frames.values():
             frame.set_config(TankConfig())
